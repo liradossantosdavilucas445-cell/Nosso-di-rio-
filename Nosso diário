@@ -1,0 +1,430 @@
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Diário da Galera</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #e7e5e4; /* stone-200 */
+        }
+        .font-serif {
+            font-family: 'Merriweather', serif;
+        }
+        
+        /* Custom scrollbar for webkit */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d6d3d1;
+            border-radius: 10px;
+        }
+        
+        .entry-enter {
+            animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Fluid transitions */
+        .fluid-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body class="h-screen w-full overflow-hidden flex justify-center bg-stone-200">
+
+    <div class="w-full max-w-md h-full bg-[#fdfbf7] shadow-2xl flex flex-col relative sm:border-x sm:border-stone-300">
+        
+        <!-- Header & Filters (Sticky Container) -->
+        <div class="sticky top-0 z-20 flex flex-col w-full">
+            <header class="bg-[#fdfbf7]/95 backdrop-blur-md px-5 py-4 border-b border-stone-200 flex justify-between items-center shadow-sm">
+                <div>
+                    <h1 class="text-xl font-serif text-stone-800">Diário da Galera 📖</h1>
+                    <p class="text-xs text-stone-500 mt-1" id="online-status">Conectando...</p>
+                </div>
+                <button id="change-name-btn" class="hidden text-sm text-indigo-600 font-medium hover:text-indigo-800 transition-colors">
+                    Mudar Nome
+                </button>
+            </header>
+
+            <!-- Filters -->
+            <div class="bg-[#fdfbf7]/90 backdrop-blur-md px-4 py-2 flex gap-2 border-b border-stone-200 shadow-sm transition-all">
+                <button id="filter-all" class="fluid-transition flex-1 py-1.5 rounded-lg bg-indigo-100 text-indigo-700 font-semibold text-sm border border-indigo-200 shadow-sm">De Todos</button>
+                <button id="filter-mine" class="fluid-transition flex-1 py-1.5 rounded-lg bg-transparent text-stone-500 font-medium text-sm hover:bg-stone-100 border border-transparent">Meu Diário</button>
+            </div>
+        </div>
+
+        <!-- Feed Container -->
+        <main id="feed" class="flex-1 overflow-y-auto p-4 pb-36 space-y-4 scroll-smooth">
+            <!-- Entries will be injected here via JS -->
+            <div id="loading-indicator" class="flex justify-center items-center h-full">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+        </main>
+
+        <!-- Input Area (Fixed Bottom) -->
+        <footer class="absolute bottom-0 w-full bg-[#fdfbf7] border-t border-stone-200 p-3 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] fluid-transition">
+            <div id="error-toast" class="hidden w-full bg-red-100 text-red-700 text-xs py-2 px-3 rounded-xl mb-2 text-center transition-all"></div>
+            
+            <!-- Date Picker for Entry -->
+            <div class="flex items-center gap-2 mb-2 px-1">
+                <label for="entry-date" class="text-xs text-stone-500 font-medium">Data do relato:</label>
+                <input type="date" id="entry-date" class="text-sm border border-stone-300 rounded-lg px-2 py-1 bg-white text-stone-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 fluid-transition cursor-pointer shadow-sm" required>
+            </div>
+
+            <form id="entry-form" class="flex gap-2 items-end relative">
+                <textarea 
+                    id="entry-input" 
+                    class="flex-1 resize-none rounded-2xl border border-stone-300 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent max-h-32 min-h-[50px] shadow-inner text-sm sm:text-base transition-all" 
+                    rows="1" 
+                    placeholder="Escreva sobre o seu dia..."
+                    disabled
+                ></textarea>
+                <button 
+                    type="submit" 
+                    id="send-btn" 
+                    class="bg-indigo-600 text-white rounded-full w-12 h-12 flex items-center justify-center shrink-0 shadow-md active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+                    disabled
+                >
+                    <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                    </svg>
+                </button>
+            </form>
+        </footer>
+
+        <!-- Setup Screen Overlay (For Nickname) -->
+        <div id="setup-screen" class="absolute inset-0 bg-[#fdfbf7] z-50 flex flex-col items-center justify-center p-6 text-center transition-opacity duration-300">
+            <div class="w-full max-w-sm">
+                <div class="text-5xl mb-4">📓</div>
+                <h1 class="text-3xl font-serif text-stone-800 mb-2">Nosso Diário</h1>
+                <p class="text-stone-600 mb-8 text-sm">Um lugar para você e seus amigos compartilharem como foi o dia.</p>
+                
+                <form id="setup-form" class="w-full">
+                    <input 
+                        type="text" 
+                        id="nickname-input" 
+                        class="w-full px-4 py-4 rounded-2xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-center text-lg mb-4 shadow-inner" 
+                        placeholder="Como devemos te chamar?"
+                        required
+                        maxlength="20"
+                    >
+                    <button 
+                        type="submit" 
+                        class="w-full bg-indigo-600 text-white font-semibold py-4 px-8 rounded-2xl shadow-lg hover:bg-indigo-700 active:scale-95 transition-all"
+                    >
+                        Entrar no Diário
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Environment variables provided by the Immersive environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'diary-app-local';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            // Mock config to prevent crashes if run completely outside the platform without config
+            apiKey: "mock-key",
+            projectId: "mock-project"
+        };
+        const customToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let currentUser = null;
+        let myNickname = '';
+        let entries = [];
+        let currentFilter = 'all'; // 'all' or 'mine'
+
+        // DOM Elements
+        const setupScreen = document.getElementById('setup-screen');
+        const setupForm = document.getElementById('setup-form');
+        const nicknameInput = document.getElementById('nickname-input');
+        const changeNameBtn = document.getElementById('change-name-btn');
+        const feed = document.getElementById('feed');
+        const entryForm = document.getElementById('entry-form');
+        const entryInput = document.getElementById('entry-input');
+        const sendBtn = document.getElementById('send-btn');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const onlineStatus = document.getElementById('online-status');
+        const errorToast = document.getElementById('error-toast');
+        
+        // New DOM Elements
+        const filterAllBtn = document.getElementById('filter-all');
+        const filterMineBtn = document.getElementById('filter-mine');
+        const entryDateInput = document.getElementById('entry-date');
+
+        // Firestore paths - using public space so friends can see it
+        const collectionName = 'diary_entries';
+        const entriesRef = collection(db, 'artifacts', appId, 'public', 'data', collectionName);
+
+        
+        // Show non-blocking error message
+        function showError(msg) {
+            errorToast.textContent = msg;
+            errorToast.classList.remove('hidden');
+            setTimeout(() => {
+                errorToast.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Auto-resize textarea
+        entryInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+            if (this.value.trim() !== '') {
+                sendBtn.classList.add('bg-indigo-600');
+                sendBtn.classList.remove('bg-stone-400');
+            } else {
+                sendBtn.classList.add('bg-stone-400');
+                sendBtn.classList.remove('bg-indigo-600');
+            }
+        });
+
+        // Format Date nicely
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return "Agora";
+            const date = new Date(timestamp);
+            const today = new Date();
+            
+            const isToday = date.getDate() === today.getDate() && 
+                            date.getMonth() === today.getMonth() && 
+                            date.getFullYear() === today.getFullYear();
+            
+            const timeOptions = { hour: '2-digit', minute: '2-digit' };
+            const timeString = date.toLocaleTimeString('pt-BR', timeOptions);
+
+            if (isToday) {
+                return `Hoje às ${timeString}`;
+            } else {
+                return `${date.toLocaleDateString('pt-BR')} às ${timeString}`;
+            }
+        }
+
+        // Format selected date (YYYY-MM-DD) to friendly format
+        function formatEntryDate(dateString) {
+            if (!dateString) return "Data desconhecida";
+            const [year, month, day] = dateString.split('-');
+            const dateObj = new Date(year, month - 1, day);
+            const today = new Date();
+            
+            if (dateObj.getDate() === today.getDate() && 
+                dateObj.getMonth() === today.getMonth() && 
+                dateObj.getFullYear() === today.getFullYear()) {
+                return "Hoje";
+            }
+            return `${day}/${month}/${year}`;
+        }
+
+        function renderFeed() {
+            loadingIndicator.style.display = 'none';
+            feed.innerHTML = ''; // Clear feed
+
+            const filteredEntries = entries.filter(entry => {
+                if (currentFilter === 'all') return true;
+                return entry.userId === currentUser.uid;
+            });
+
+            if (filteredEntries.length === 0) {
+                feed.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center p-6 text-stone-400 transition-opacity duration-500">
+                        <span class="text-4xl mb-3 animate-bounce">🌱</span>
+                        <p>${currentFilter === 'all' ? 'O diário está vazio.<br>Seja o primeiro a escrever!' : 'Você ainda não escreveu nada.<br>Como foi o seu dia?'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let lastDateStr = "";
+
+            filteredEntries.forEach(entry => {
+                const isMe = entry.userId === currentUser.uid;
+                const entryDate = entry.selectedDate ? formatEntryDate(entry.selectedDate) : (entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('pt-BR') : 'Hoje');
+                
+                // Date separator
+                if (entryDate !== lastDateStr) {
+                    const separator = document.createElement('div');
+                    separator.className = 'text-center my-6 sticky top-2 z-10';
+                    separator.innerHTML = `<span class="bg-[#fdfbf7]/80 backdrop-blur-md text-stone-500 text-[10px] font-bold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm border border-stone-200">${entryDate}</span>`;
+                    feed.appendChild(separator);
+                    lastDateStr = entryDate;
+                }
+
+                // Entry Card
+                const card = document.createElement('div');
+                card.className = `flex flex-col mb-4 entry-enter ${isMe ? 'items-end' : 'items-start'}`;
+                
+                const bubbleColor = isMe ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white border border-stone-200 text-stone-800 rounded-bl-none shadow-sm';
+                const authorDisplay = isMe ? 'Você' : (entry.author || 'Anônimo');
+                
+                // Convert line breaks to <br> tags
+                const formattedText = entry.text.replace(/\n/g, '<br>');
+
+                card.innerHTML = `
+                    <div class="text-[11px] text-stone-500 mb-1 px-1 font-medium flex gap-2">
+                        <span>${authorDisplay}</span>
+                    </div>
+                    <div class="max-w-[85%] px-4 py-3 rounded-2xl ${bubbleColor} shadow-sm leading-relaxed text-sm sm:text-base">
+                        ${formattedText}
+                    </div>
+                    <div class="text-[10px] text-stone-400 mt-1 px-1">
+                        ${formatTimestamp(entry.createdAt)}
+                    </div>
+                `;
+                
+                feed.appendChild(card);
+            });
+
+            // Scroll to bottom
+            feed.scrollTo({
+                top: feed.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+
+        function setupFirestoreListener() {
+            if (!currentUser) return;
+
+            // Fetch all entries, sort in memory per system prompt rules (No orderBy/limit)
+            onSnapshot(entriesRef, (snapshot) => {
+                const fetchedEntries = [];
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    fetchedEntries.push({
+                        id: doc.id,
+                        ...data
+                    });
+                });
+
+                // Sort by selectedDate, then by createdAt (time)
+                entries = fetchedEntries.sort((a, b) => {
+                    const dateA = a.selectedDate || (a.createdAt ? new Date(a.createdAt).toISOString().split('T')[0] : '1970-01-01');
+                    const dateB = b.selectedDate || (b.createdAt ? new Date(b.createdAt).toISOString().split('T')[0] : '1970-01-01');
+                    
+                    if (dateA !== dateB) return dateA.localeCompare(dateB);
+                    
+                    const timeA = a.createdAt || 0;
+                    const timeB = b.createdAt || 0;
+                    return timeA - timeB;
+                });
+
+                renderFeed();
+                onlineStatus.textContent = `Online • ${myNickname}`;
+                onlineStatus.classList.add('text-green-600');
+                
+                // Enable inputs
+                entryInput.disabled = false;
+                sendBtn.disabled = false;
+
+            }, (error) => {
+                console.error("Erro ao sincronizar diário:", error);
+                onlineStatus.textContent = "Desconectado";
+                onlineStatus.classList.replace('text-green-600', 'text-red-500');
+                showError("Não foi possível conectar ao diário.");
+            });
+        }
+
+        
+        // Handle sending new entry
+        entryForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = entryInput.value.trim();
+            const selectedDate = entryDateInput.value;
+            
+            if (!text || !currentUser || !myNickname) return;
+            
+            if (!selectedDate) {
+                showError("Por favor, selecione a data do seu relato.");
+                return;
+            }
+
+            // Optimistic UI clear
+            entryInput.value = '';
+            entryInput.style.height = 'auto';
+            sendBtn.classList.replace('bg-indigo-600', 'bg-stone-400');
+            
+            try {
+                await addDoc(entriesRef, {
+                    text: text,
+                    author: myNickname,
+                    userId: currentUser.uid,
+                    selectedDate: selectedDate,
+                    createdAt: Date.now() // Used for exact time display
+                });
+            } catch (err) {
+                console.error("Erro ao salvar entrada:", err);
+                showError("Erro ao enviar mensagem. Tente novamente.");
+                // Restore input
+                entryInput.value = text;
+            }
+        });
+
+        // Setup Filter Actions
+        function updateFilters() {
+            if (currentFilter === 'all') {
+                filterAllBtn.className = "fluid-transition flex-1 py-1.5 rounded-lg bg-indigo-100 text-indigo-700 font-semibold text-sm border border-indigo-200 shadow-sm";
+                filterMineBtn.className = "fluid-transition flex-1 py-1.5 rounded-lg bg-transparent text-stone-500 font-medium text-sm hover:bg-stone-100 border border-transparent";
+            } else {
+                filterMineBtn.className = "fluid-transition flex-1 py-1.5 rounded-lg bg-indigo-100 text-indigo-700 font-semibold text-sm border border-indigo-200 shadow-sm";
+                filterAllBtn.className = "fluid-transition flex-1 py-1.5 rounded-lg bg-transparent text-stone-500 font-medium text-sm hover:bg-stone-100 border border-transparent";
+            }
+            renderFeed();
+        }
+
+        filterAllBtn.addEventListener('click', () => {
+            currentFilter = 'all';
+            updateFilters();
+        });
+
+        filterMineBtn.addEventListener('click', () => {
+            currentFilter = 'mine';
+            updateFilters();
+        });
+
+        // Set default date to today
+        function initDateInput() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            entryDateInput.value = `${year}-${month}-${day}`;
+        }
+
+        // Handle Setup Form (Setting Nickname)
+        setupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const name = nicknameInput.value.trim();
+            if (name) {
+                myNickname = name;
+                // Basic local memory to prevent asking every single reload on same session, 
+                // but avoiding full localStorage dependence as requested by rules.
+                sessionStorage.setItem('diary_nickname', myNickname); 
+                
+                setupScreen.style.opacity = '0';
+  
